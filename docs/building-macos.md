@@ -5,7 +5,8 @@ This guide covers building **WiiCompiled** (base game) and **Retro Rewind** from
 ## Downloadable setup
 
 For a packaged setup CLI rather than building the tools from source, download
-`WiiCompiled-Setup-macos-arm64.zip` from the [latest WiiCompiled release](https://github.com/patchzyy/Wiicompiled/releases/latest).
+`WiiCompiled-Setup-macos-arm64.zip` from a [WiiCompiled tagged release](https://github.com/patchzyy/Wiicompiled/releases)
+that includes the macOS setup package.
 The archive includes the self-contained setup and translator executables, the pinned `nodtool`
 binary, and only the tracked source files needed for the local native build. It contains no game
 dump, translated game executable, or Retro Rewind files. The setup compiles the game on your Mac

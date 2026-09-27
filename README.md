@@ -118,11 +118,11 @@ image under Settings, turn on **WiiCompiled (beta)**, and hit install from the H
 Wheel Wizard downloads the setup tool from this repo and walks you through install, updates and
 launching. The backend itself is deliberately command-line only, Wheel Wizard is a wrapper around it.
 
-On macOS 14 or later with Apple Silicon, download `WiiCompiled-Setup-macos-arm64.zip` from this
-repository's [latest release](https://github.com/patchzyy/Wiicompiled/releases/latest), extract it,
-and follow the included `README.txt` to run the setup CLI. The release setup is not signed or
-notarized; see the [macOS build guide](docs/building-macos.md) for the quarantine and prerequisite
-instructions.
+For macOS 14 or later on Apple Silicon, a tagged release that includes the macOS setup package
+publishes `WiiCompiled-Setup-macos-arm64.zip` on this repository's
+[Releases](https://github.com/patchzyy/Wiicompiled/releases) page. Extract it and follow the
+included `README.txt` to run the setup CLI. The release setup is not signed or notarized; see the
+[macOS build guide](docs/building-macos.md) for quarantine and prerequisite instructions.
 
 > [!CAUTION]
 > Only take builds from this repository's
