@@ -15,6 +15,7 @@ internal sealed class ProductInstallRecord
     public string DolSha256 { get; set; } = "";
     public string RelSha256 { get; set; } = "";
     public string BuiltUtc { get; set; } = "";
+    public string? RetroRewindDirectory { get; set; }
 }
 
 /// <summary>

@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace WiiCompiled.Setup.Linux;
 
 /// <summary>
-/// Invokes Launcher/local-build.sh and turns its stdout into progress reports. Replaces
+/// Invokes the native platform build script and turns its stdout into progress reports. Replaces
 /// LocalBuildService.cs's hardcoded Windows PowerShell 5.1 invocation - there is no PowerShell
 /// dependency here at all, just bash.
 /// </summary>
@@ -17,8 +17,13 @@ internal static class BuildRunner
         IInstallReporter reporter,
         CancellationToken cancellationToken)
     {
-        var script = Path.Combine(workspace, "Launcher", "local-build.sh");
-        if (!File.Exists(script)) throw new FileNotFoundException("local-build.sh is missing", script);
+        var macOS = OperatingSystem.IsMacOS();
+        if (macOS && sysroot is not null)
+            throw new ArgumentException("--sysroot is not supported by the macOS build.");
+
+        var script = Path.Combine(workspace, "Launcher",
+            macOS ? "local-build-macos.command" : "local-build.sh");
+        if (!File.Exists(script)) throw new FileNotFoundException($"{Path.GetFileName(script)} is missing", script);
 
         var startInfo = new ProcessStartInfo("bash")
         {
@@ -36,8 +41,6 @@ internal static class BuildRunner
         }
         if (!string.IsNullOrEmpty(retroDir))
         {
-            // Still forwarded to local-build.sh under its own internal name -
-            // --retro-rewind-package-dir - matching LocalBuild.ps1's own -RetroRewindPackageDirectory.
             startInfo.ArgumentList.Add("--retro-rewind-package-dir"); startInfo.ArgumentList.Add(retroDir);
         }
         if (!string.IsNullOrEmpty(retroWfcOfflineDir))
@@ -49,6 +52,18 @@ internal static class BuildRunner
         if (!string.IsNullOrEmpty(translatorBin))
         {
             startInfo.ArgumentList.Add("--translator-bin"); startInfo.ArgumentList.Add(translatorBin);
+        }
+        if (macOS)
+        {
+            if (!string.IsNullOrEmpty(cmakeBin))
+            {
+                startInfo.ArgumentList.Add("--cmake"); startInfo.ArgumentList.Add(cmakeBin);
+            }
+            if (!string.IsNullOrEmpty(ninjaBin))
+            {
+                startInfo.ArgumentList.Add("--ninja"); startInfo.ArgumentList.Add(ninjaBin);
+            }
+            goto StartBuild;
         }
         // Forwarded by AppRun so the AppImage's bundled clang/lld (see prepare-portable-clang.sh)
         // is used instead of local-build.sh's own default of whatever clang is on $PATH.
@@ -83,6 +98,7 @@ internal static class BuildRunner
             startInfo.ArgumentList.Add("--sysroot"); startInfo.ArgumentList.Add(sysroot);
         }
 
+    StartBuild:
         using var process = new Process { StartInfo = startInfo };
         var window = new BuildProgressWindow(reporter, InstallStages.Build, start: 6, end: 96);
 
@@ -105,7 +121,7 @@ internal static class BuildRunner
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"local-build.sh failed (exit {process.ExitCode}). See diagnostics above.");
+            throw new InvalidOperationException($"{Path.GetFileName(script)} failed (exit {process.ExitCode}). See diagnostics above.");
         }
     }
 

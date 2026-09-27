@@ -38,16 +38,24 @@ internal static class Program
             switch (command)
             {
                 case "install":
+                case "silent":
                     await InstallAsync(flags, reporter, cts.Token);
                     break;
+                case "repair-products":
+                    await RepairProductsAsync(flags, reporter, cts.Token);
+                    break;
                 case "uninstall":
+                case "silent-uninstall":
                     Uninstall();
                     break;
                 case "launch-base":
+                case "launch_base":
                     return Launch("base", flags);
                 case "launch-retro":
+                case "launch_retro":
                     return Launch("retro-rewind", flags);
                 case "check-products":
+                case "check_products":
                     CheckProducts();
                     break;
                 default:
@@ -94,7 +102,7 @@ internal static class Program
         // check further down is a simpler backstop, not the primary validation anymore.
         if (installsRetro) retroDir = RetroRewindSource.ResolveRetroRewind6(retroDir!);
 
-        var workspace = flags.GetValueOrDefault("workspace") ?? WorkspaceLocator.FindFrom(AppContext.BaseDirectory);
+        var workspace = flags.GetValueOrDefault("workspace") ?? FindWorkspace();
         var manifest = ProjectManifest.Load(Path.Combine(workspace, "projects", "mkwii", "recomp.yml"));
         var assetsDir = Path.Combine(workspace, "Assets");
 
@@ -123,6 +131,15 @@ internal static class Program
         var profiles = installsRetro ? new[] { "base", "retro-rewind" } : new[] { "base" };
         var baseInstallDir = installsRetro ? DefaultInstallDir("base") : null;
         var installDir = flags.GetValueOrDefault("install-dir") ?? DefaultInstallDir(installsRetro ? "retro-rewind" : "base");
+        var translatorBin = flags.GetValueOrDefault("translator-bin");
+        var cmakeBin = flags.GetValueOrDefault("cmake");
+        var ninjaBin = flags.GetValueOrDefault("ninja");
+        if (OperatingSystem.IsMacOS())
+        {
+            translatorBin ??= BundledTool("Translator.Cli");
+            cmakeBin ??= BundledTool(Path.Combine("cmake", "bin", "cmake"));
+            ninjaBin ??= BundledTool("ninja");
+        }
 
         string? retroWfcOfflineDir = null;
         if (downloadPayload)
@@ -158,12 +175,12 @@ internal static class Program
             retroWfcOfflineDir,
             skipPayload,
             flags.ContainsKey("force-clean-build"),
-            flags.GetValueOrDefault("translator-bin"),
+            translatorBin,
             flags.GetValueOrDefault("cc"),
             flags.GetValueOrDefault("cxx"),
             flags.GetValueOrDefault("fuse-ld"),
-            flags.GetValueOrDefault("cmake"),
-            flags.GetValueOrDefault("ninja"),
+            cmakeBin,
+            ninjaBin,
             flags.GetValueOrDefault("native-prebuilt-dir"),
             sysroot,
             reporter, token);
@@ -175,7 +192,10 @@ internal static class Program
         foreach (var p in profiles)
         {
             var dir = p == "base" ? (baseInstallDir ?? installDir) : installDir;
-            var exeName = p == "base" ? "WiiCompiled" : "RetroRewind";
+            var exeName = OperatingSystem.IsMacOS()
+                ? Path.Combine(p == "base" ? "WiiCompiled.app" : "RetroRewind.app", "Contents", "MacOS",
+                    p == "base" ? "WiiCompiled" : "RetroRewind")
+                : p == "base" ? "WiiCompiled" : "RetroRewind";
             var displayName = p == "base" ? "WiiCompiled (base game)" : "WiiCompiled (Retro Rewind)";
             state.Products.RemoveAll(r => r.Profile == p);
             state.Products.Add(new ProductInstallRecord
@@ -187,7 +207,8 @@ internal static class Program
                 RelSha256 = relSha,
                 BuiltUtc = DateTime.UtcNow.ToString("O"),
             });
-            DesktopEntry.Create(p, displayName, Path.Combine(dir, exeName));
+            if (!OperatingSystem.IsMacOS())
+                DesktopEntry.Create(p, displayName, Path.Combine(dir, exeName));
         }
         JsonState.Write(StatePath, state);
 
@@ -196,7 +217,9 @@ internal static class Program
         // that isn't main.dol/StaticR.rel. Linux has no --portable flag, so this is always the
         // per-user Config.toml (RuntimeConfiguration.ResolveConfigPath's Windows-only portable-root
         // lookup has nothing to find here either way).
-        var configPath = RuntimeConfiguration.ApplicationDataConfigPath;
+        var configPath = OperatingSystem.IsMacOS()
+            ? Path.Combine(MacApplicationDataDirectory, "Config.toml")
+            : RuntimeConfiguration.ApplicationDataConfigPath;
         var dataDir = Path.Combine(assetsDir, "DATA");
         if (Directory.Exists(dataDir))
         {
@@ -210,6 +233,26 @@ internal static class Program
         reporter.Progress(InstallStages.Shortcuts, "Install complete", 99);
     }
 
+    private static async Task RepairProductsAsync(
+        Dictionary<string, string?> flags, IInstallReporter reporter, CancellationToken token)
+    {
+        var state = JsonState.TryRead<InstallState>(StatePath);
+        if (state is null || state.Products.Count == 0)
+            throw new InvalidOperationException("Nothing is installed to repair. Run 'install' first.");
+
+        var retro = flags.GetValueOrDefault("retro-dir") ??
+                    state.Products.FirstOrDefault(record => record.Profile == "retro-rewind")?.RetroRewindDirectory;
+        if (retro is not null)
+        {
+            flags["retro-dir"] = retro;
+            flags["skip-retro-wfc-payload"] = null;
+        }
+        flags["install-dir"] = flags.GetValueOrDefault("install-dir") ??
+                               state.Products.FirstOrDefault(record => record.Profile == "retro-rewind")?.InstallDirectory ??
+                               state.Products[0].InstallDirectory;
+        await InstallAsync(flags, reporter, token);
+    }
+
     private static void Uninstall()
     {
         // Matches Windows: UninstallService.cs removes the whole install directory unconditionally -
@@ -217,11 +260,19 @@ internal static class Program
         var state = JsonState.TryRead<InstallState>(StatePath) ?? new InstallState();
         foreach (var record in state.Products.ToList())
         {
-            if (Directory.Exists(record.InstallDirectory))
+            if (OperatingSystem.IsMacOS())
             {
-                Directory.Delete(record.InstallDirectory, recursive: true);
+                var executable = Path.Combine(record.InstallDirectory, record.ExecutableName);
+                var appBundle = Directory.GetParent(Path.GetDirectoryName(executable)!)?.Parent?.FullName;
+                if (appBundle is not null && Directory.Exists(appBundle))
+                    Directory.Delete(appBundle, recursive: true);
             }
-            DesktopEntry.Remove(record.Profile);
+            else
+            {
+                if (Directory.Exists(record.InstallDirectory))
+                    Directory.Delete(record.InstallDirectory, recursive: true);
+                DesktopEntry.Remove(record.Profile);
+            }
             state.Products.Remove(record);
             Console.WriteLine($"Removed {record.Profile} from {record.InstallDirectory}");
         }
@@ -286,11 +337,38 @@ internal static class Program
     private static string? Sha256IfExists(string path) => File.Exists(path) ? Sha256Of(path) : null;
 
     private static string StatePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WiiCompiled", "install-state.json");
+        OperatingSystem.IsMacOS() ? MacApplicationDataDirectory :
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        OperatingSystem.IsMacOS() ? "install-state.json" : Path.Combine("WiiCompiled", "install-state.json"));
 
     private static string DefaultInstallDir(string profile) => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WiiCompiled", "Install",
+        OperatingSystem.IsMacOS() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Applications", "WiiCompiled") :
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WiiCompiled", "Install"),
         profile == "base" ? "Base" : "RetroRewind");
+
+    private static string MacApplicationDataDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "WiiCompiled");
+
+    private static string? BundledTool(string relativePath)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "tools", relativePath);
+        return File.Exists(path) ? path : null;
+    }
+
+    private static string FindWorkspace()
+    {
+        var marker = OperatingSystem.IsMacOS() ? "local-build-macos.command" : "local-build.sh";
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var level = 0; level <= 8 && current is not null; level++, current = current.Parent)
+        {
+            var packagedWorkspace = Path.Combine(current.FullName, "workspace");
+            if (File.Exists(Path.Combine(packagedWorkspace, "Launcher", marker)))
+                return packagedWorkspace;
+            if (File.Exists(Path.Combine(current.FullName, "Launcher", marker)))
+                return current.FullName;
+        }
+        throw new InvalidOperationException($"Could not find Launcher/{marker}. Pass --workspace <path-to-checkout> explicitly.");
+    }
 
     /// <summary>
     /// A single pass that finds both the command word and every --flag[=value] pair, regardless
@@ -308,6 +386,16 @@ internal static class Program
             if (arg.StartsWith("--", StringComparison.Ordinal))
             {
                 var name = arg[2..];
+                name = name switch
+                {
+                    "silent" => "silent",
+                    "uninstall" => "uninstall",
+                    "launch-base" => "launch-base",
+                    "launch-retro" => "launch-retro",
+                    "check-products" => "check-products",
+                    "repair-products" => "repair-products",
+                    _ => name
+                };
                 if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
                 {
                     flags[name] = args[++i];
@@ -319,7 +407,7 @@ internal static class Program
             }
             else if (command is null)
             {
-                command = arg;
+                command = arg.StartsWith("--", StringComparison.Ordinal) ? arg[2..] : arg;
             }
         }
         return (command, flags);
@@ -339,6 +427,7 @@ internal static class Program
           launch-base
           launch-retro
           check-products
+          repair-products
           --version
         """);
     }
