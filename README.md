@@ -97,7 +97,7 @@ Known limitations of the Wii Remote path:
 - CPU: Intel Core i5-8400 / AMD Ryzen 5 2600 (4c/6c, ~3.5GHz+) or higher
 - About 20 GB of free disk space during installation (Final game size ~5 GB)
 - macOS 14 (Sonoma) or later on Apple Silicon
-- On macOS, Apple Xcode Command Line Tools (Setup opens Apple's installer when they are missing)
+- On macOS, Apple Xcode Command Line Tools, CMake, and Ninja
 - A clean, unmodified **PAL `RMCP01`** disc image of Mario Kart Wii, dumped by you. ISO, GCM,
   GCZ, CISO, WBFS, WIA and RVZ are accepted.
 
@@ -118,6 +118,11 @@ image under Settings, turn on **WiiCompiled (beta)**, and hit install from the H
 Wheel Wizard downloads the setup tool from this repo and walks you through install, updates and
 launching. The backend itself is deliberately command-line only, Wheel Wizard is a wrapper around it.
 
+On macOS 14 or later with Apple Silicon, download `WiiCompiled-Setup-macos-arm64.zip` from this
+repository's [latest release](https://github.com/patchzyy/Wiicompiled/releases/latest), extract it,
+and follow the included `README.txt` to run the setup CLI. The release setup is not signed or
+notarized; see the [macOS build guide](docs/building-macos.md) for the quarantine and prerequisite
+instructions.
 
 > [!CAUTION]
 > Only take builds from this repository's

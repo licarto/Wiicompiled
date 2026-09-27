@@ -63,42 +63,43 @@ internal static class BuildRunner
             {
                 startInfo.ArgumentList.Add("--ninja"); startInfo.ArgumentList.Add(ninjaBin);
             }
-            goto StartBuild;
         }
-        // Forwarded by AppRun so the AppImage's bundled clang/lld (see prepare-portable-clang.sh)
-        // is used instead of local-build.sh's own default of whatever clang is on $PATH.
-        if (!string.IsNullOrEmpty(ccBin))
+        else
         {
-            startInfo.ArgumentList.Add("--cc"); startInfo.ArgumentList.Add(ccBin);
-        }
-        if (!string.IsNullOrEmpty(cxxBin))
-        {
-            startInfo.ArgumentList.Add("--cxx"); startInfo.ArgumentList.Add(cxxBin);
-        }
-        if (!string.IsNullOrEmpty(fuseLd))
-        {
-            startInfo.ArgumentList.Add("--fuse-ld"); startInfo.ArgumentList.Add(fuseLd);
-        }
-        if (!string.IsNullOrEmpty(cmakeBin))
-        {
-            startInfo.ArgumentList.Add("--cmake"); startInfo.ArgumentList.Add(cmakeBin);
-        }
-        if (!string.IsNullOrEmpty(ninjaBin))
-        {
-            startInfo.ArgumentList.Add("--ninja"); startInfo.ArgumentList.Add(ninjaBin);
-        }
-        // Forwarded by AppRun so the AppImage's bundled precompiled aurora/third-party package (see
-        // Prepare-NativePrebuilt.sh) is used instead of local-build.sh compiling aurora-main itself.
-        if (!string.IsNullOrEmpty(nativePrebuiltDir))
-        {
-            startInfo.ArgumentList.Add("--native-prebuilt-dir"); startInfo.ArgumentList.Add(nativePrebuiltDir);
-        }
-        if (!string.IsNullOrEmpty(sysroot))
-        {
-            startInfo.ArgumentList.Add("--sysroot"); startInfo.ArgumentList.Add(sysroot);
+            // Forwarded by AppRun so the AppImage's bundled clang/lld (see prepare-portable-tools.sh)
+            // is used instead of local-build.sh's own default of whatever clang is on $PATH.
+            if (!string.IsNullOrEmpty(ccBin))
+            {
+                startInfo.ArgumentList.Add("--cc"); startInfo.ArgumentList.Add(ccBin);
+            }
+            if (!string.IsNullOrEmpty(cxxBin))
+            {
+                startInfo.ArgumentList.Add("--cxx"); startInfo.ArgumentList.Add(cxxBin);
+            }
+            if (!string.IsNullOrEmpty(fuseLd))
+            {
+                startInfo.ArgumentList.Add("--fuse-ld"); startInfo.ArgumentList.Add(fuseLd);
+            }
+            if (!string.IsNullOrEmpty(cmakeBin))
+            {
+                startInfo.ArgumentList.Add("--cmake"); startInfo.ArgumentList.Add(cmakeBin);
+            }
+            if (!string.IsNullOrEmpty(ninjaBin))
+            {
+                startInfo.ArgumentList.Add("--ninja"); startInfo.ArgumentList.Add(ninjaBin);
+            }
+            // Forwarded by AppRun so the AppImage's bundled precompiled aurora/third-party package
+            // is used instead of local-build.sh compiling aurora-main itself.
+            if (!string.IsNullOrEmpty(nativePrebuiltDir))
+            {
+                startInfo.ArgumentList.Add("--native-prebuilt-dir"); startInfo.ArgumentList.Add(nativePrebuiltDir);
+            }
+            if (!string.IsNullOrEmpty(sysroot))
+            {
+                startInfo.ArgumentList.Add("--sysroot"); startInfo.ArgumentList.Add(sysroot);
+            }
         }
 
-    StartBuild:
         using var process = new Process { StartInfo = startInfo };
         var window = new BuildProgressWindow(reporter, InstallStages.Build, start: 6, end: 96);
 
