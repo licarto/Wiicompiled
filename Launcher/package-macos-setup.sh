@@ -30,11 +30,8 @@ command -v git >/dev/null || fail 'git is required'
 command -v ditto >/dev/null || fail 'ditto is required'
 
 version=$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' \
-    "$repo_root/Launcher/WiiCompiled.Setup.Linux/WiiCompiled.Setup.Linux.csproj" | head -n1)
+    "$repo_root/Launcher/Directory.Build.props" | head -n1)
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail 'could not read a valid setup version'
-[[ -f "$repo_root/Launcher/WiiCompiled.Setup.Linux/Models.cs" ]] || fail 'setup product version source is missing'
-grep -Fq "public const string Version = \"$version\";" \
-    "$repo_root/Launcher/WiiCompiled.Setup.Linux/Models.cs" || fail 'setup project and host versions differ'
 git -C "$repo_root" diff --quiet HEAD -- projects runtime aurora-main \
     Launcher/local-build-macos.command Launcher/macos/extract-disc.command Launcher/macos/publish-app.command ||
     fail 'tracked packaged sources have changes not present in HEAD; commit them before packaging'
